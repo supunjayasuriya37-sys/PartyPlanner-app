@@ -1,13 +1,15 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
-class AiPlannerService {
-  // TODO: Secure this key properly (e.g., Firebase Remote Config or .env)
-  // For development, we might need to ask the user to input it or pass it from build config.
-  final String _apiKey = 'YOUR_OPENROUTER_API_KEY'; 
-  final String _baseUrl = 'https://openrouter.ai/api/v1/chat/completions';
+class AIService {
+  static const String _baseUrl = 'https://openrouter.ai/api/v1/chat/completions';
+  final String _apiKey;
 
-  Future<Map<String, dynamic>> planEvent(String prompt) async {
+  AIService({String? apiKey}) 
+      // TODO: Replace with secure API key handling (e.g., flutter_dotenv)
+      : _apiKey = apiKey ?? 'YOUR_OPENROUTER_API_KEY';
+
+  Future<String> generateEventPlan(String prompt) async {
     try {
       final response = await http.post(
         Uri.parse(_baseUrl),
@@ -15,32 +17,33 @@ class AiPlannerService {
           'Authorization': 'Bearer $_apiKey',
           'Content-Type': 'application/json',
           'HTTP-Referer': 'https://partyplanner.app', // Required by OpenRouter
+          'X-Title': 'PartyPlanner', // Optional
         },
         body: jsonEncode({
-          'model': 'google/gemma-7b-it:free', // Or generic model
+          'model': 'google/gemini-2.0-flash-lite-preview-02-05:free', // Use a free model for testing
           'messages': [
             {
               'role': 'system',
-              'content': 'You are an expert event planner. Output ONLY valid JSON.',
+              'content': 'You are a helpful event planner assistant. '
+                  'Generate a detailed event plan based on the user request. '
+                  'Include a schedule, item list, and venue suggestions if applicable.'
             },
             {
               'role': 'user',
-              'content': 'Plan an event: $prompt',
-            }
+              'content': prompt,
+            },
           ],
         }),
       );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final content = data['choices'][0]['message']['content'];
-        // TODO: Parse the content primarily if it's markdown code block
-        return jsonDecode(content); // simplistic parsing
+        return data['choices'][0]['message']['content'] ?? 'No plan generated.';
       } else {
-        throw Exception('Failed to plan event: ${response.body}');
+        throw Exception('Failed to generate plan: ${response.statusCode} - ${response.body}');
       }
     } catch (e) {
-      throw Exception('AI Service Error: $e');
+      throw Exception('Error calling AI Service: $e');
     }
   }
 }

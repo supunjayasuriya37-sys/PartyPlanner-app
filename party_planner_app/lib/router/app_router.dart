@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import '../features/auth/logic/auth_bloc.dart';
 import '../features/auth/screens/login_screen.dart';
 import '../features/dashboard/screens/dashboard_screen.dart';
+import '../features/planner/screens/ai_planner_screen.dart';
 
 class AppRouter {
   final AuthBloc authBloc;
@@ -15,7 +15,7 @@ class AppRouter {
     refreshListenable: StreamListenable(authBloc.stream),
     redirect: (context, state) {
       final authState = authBloc.state;
-      final isLoggingIn = state.location == '/login';
+      final isLoggingIn = state.uri.toString() == '/login';
       final isLoggedIn = authState is AuthAuthenticated;
 
       if (!isLoggedIn && !isLoggingIn) return '/login';
@@ -27,6 +27,12 @@ class AppRouter {
       GoRoute(
         path: '/',
         builder: (context, state) => const DashboardScreen(),
+        routes: [
+          GoRoute(
+            path: 'planner',
+            builder: (context, state) => const AIPlannerScreen(),
+          ),
+        ],
       ),
       GoRoute(
         path: '/login',
