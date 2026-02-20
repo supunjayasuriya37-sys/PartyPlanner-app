@@ -15,11 +15,13 @@ class AppRouter {
     refreshListenable: StreamListenable(authBloc.stream),
     redirect: (context, state) {
       final authState = authBloc.state;
-      final isLoggingIn = state.uri.toString() == '/login';
+      final isOnLogin = state.uri.toString() == '/login';
       final isLoggedIn = authState is AuthAuthenticated;
 
-      if (!isLoggedIn && !isLoggingIn) return '/login';
-      if (isLoggedIn && isLoggingIn) return '/';
+      // If not logged in (including error state), redirect to login
+      if (!isLoggedIn && !isOnLogin) return '/login';
+      // If logged in and still on login page, redirect to home
+      if (isLoggedIn && isOnLogin) return '/';
 
       return null;
     },

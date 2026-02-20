@@ -22,6 +22,26 @@ class AuthStateChanged extends AuthEvent {
   List<Object> get props => [user ?? 'null'];
 }
 
+class LoginRequested extends AuthEvent {
+  final String email;
+  final String password;
+  const LoginRequested({required this.email, required this.password});
+
+  @override
+  List<Object> get props => [email, password];
+}
+
+class SignUpRequested extends AuthEvent {
+  final String email;
+  final String password;
+  const SignUpRequested({required this.email, required this.password});
+
+  @override
+  List<Object> get props => [email, password];
+}
+
+class GoogleSignInRequested extends AuthEvent {}
+
 class LoggedOut extends AuthEvent {}
 
 // States
@@ -46,6 +66,14 @@ class AuthUnauthenticated extends AuthState {}
 
 class AuthLoading extends AuthState {}
 
+class AuthError extends AuthState {
+  final String message;
+  const AuthError(this.message);
+
+  @override
+  List<Object> get props => [message];
+}
+
 // Bloc
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final AuthRepository _authRepository;
@@ -56,6 +84,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         super(AuthUninitialized()) {
     on<AppStarted>(_onAppStarted);
     on<AuthStateChanged>(_onAuthStateChanged);
+    on<LoginRequested>(_onLoginRequested);
+    on<SignUpRequested>(_onSignUpRequested);
+    on<GoogleSignInRequested>(_onGoogleSignInRequested);
     on<LoggedOut>(_onLoggedOut);
   }
 
@@ -73,10 +104,80 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   }
 
+  Future<void> _onLoginRequested(LoginRequested event, Emitter<AuthState> emit) async {
+    emit(AuthLoading());
+    try {
+      await _authRepository.signIn(email: event.email, password: event.password);
+      // AuthStateChanged will be triggered automatically by the stream
+    } catch (e) {
+      emit(AuthError(_parseFirebaseError(e)));
+    }
+  }
+
+  Future<void> _onSignUpRequested(SignUpRequested event, Emitter<AuthState> emit) async {
+    emit(AuthLoading());
+    try {
+      await _authRepository.signUp(email: event.email, password: event.password);
+      // AuthStateChanged will be triggered automatically by the stream
+    } catch (e) {
+      emit(AuthError(_parseFirebaseError(e)));
+    }
+  }
+
+  Future<void> _onGoogleSignInRequested(GoogleSignInRequested event, Emitter<AuthState> emit) async {
+    emit(AuthLoading());
+    try {
+      await _authRepository.signInWithGoogle();
+      // AuthStateChanged will be triggered automatically by the stream
+    } catch (e) {
+      final msg = e.toString();
+      if (msg.contains('cancelled')) {
+        // User cancelled — go back to unauthenticated, not an error
+        emit(AuthUnauthenticated());
+      } else {
+        emit(AuthError(_parseFirebaseError(e)));
+      }
+    }
+  }
+
   Future<void> _onLoggedOut(LoggedOut event, Emitter<AuthState> emit) async {
     emit(AuthLoading());
     await _authRepository.signOut();
-    // AuthStateChanged will be triggered automatically by the stream
+  }
+
+  String _parseFirebaseError(dynamic error) {
+    // Handle FirebaseAuthException directly for accurate error codes
+    if (error is FirebaseAuthException) {
+      switch (error.code) {
+        case 'user-not-found':
+          return 'No account found with this email.';
+        case 'wrong-password':
+          return 'Incorrect password.';
+        case 'invalid-credential':
+        case 'INVALID_LOGIN_CREDENTIALS':
+          return 'Invalid email or password.';
+        case 'email-already-in-use':
+          return 'An account already exists with this email.';
+        case 'weak-password':
+          return 'Password is too weak. Use at least 6 characters.';
+        case 'invalid-email':
+          return 'Please enter a valid email address.';
+        case 'user-disabled':
+          return 'This account has been disabled.';
+        case 'too-many-requests':
+          return 'Too many attempts. Please try again later.';
+        case 'network-request-failed':
+          return 'Network error. Check your connection.';
+        default:
+          return error.message ?? 'Authentication failed. Please try again.';
+      }
+    }
+    // Fallback: show actual error for debugging
+    final msg = error.toString();
+    if (msg.contains('invalid-credential') || msg.contains('INVALID_LOGIN_CREDENTIALS')) {
+      return 'Invalid email or password.';
+    }
+    return msg.length > 100 ? '${msg.substring(0, 100)}...' : msg;
   }
 
   @override
